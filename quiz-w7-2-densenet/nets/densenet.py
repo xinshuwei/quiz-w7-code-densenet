@@ -60,89 +60,86 @@ def densenet(images, num_classes=1001, is_training=False,
     with tf.variable_scope(scope, 'DenseNet', [images, num_classes]):
         with slim.arg_scope(bn_drp_scope(is_training=is_training,
                                          keep_prob=dropout_keep_prob)) as ssc:
-            pass
-			scope = 'conv1'
-            net = slim.conv2d(images,2*growth,[7,7],stride=2,scope=scope)
-            #输入是300*300
+            scope = 'conv1'
+            net = slim.conv2d(images, 2 * growth, [7, 7], stride=2, scope=scope)
             end_points[scope] = net
-            #->150*150*2g
+            # -> 150 x 150 x 2g(growth)
             scope = 'pool1'
-            net = slim.max_pool2d(net,[3,3],padding='same',stride=2,scope=scope)
-            #75*75*2g
+            net = slim.max_pool2d(net, [3, 3], padding='same', stride=2, scope=scope)
+            end_points[scope] = net
+            # -> 75 x 75 x 2g
             scope = 'block1'
-            net = block(net,6,growth,scope=scope)
+            net = block(net, 6, growth, scope=scope)
             end_points[scope] = net
-            #75*75*8g（2g+6g）
+            # -> 75 x 75 x 8g (2g + 6g)
             scope = 'transition1'
-            net = bn_act_conv_drp(net,reduce_dim(net),[1,1],scope=scope)
-            #75*75*4g
-            scope =  "avgpool1"
-            net = slim.avg_pool2d(net,[1,1],stride=2,scope=scope)
+            net = bn_act_conv_drp(net, reduce_dim(net), [1, 1], scope=scope)
+            # -> 75 x 75 x 4g
+            scope = 'avgpool1'
+            net = slim.avg_pool2d(net, [2, 2], stride=2, scope=scope)
             end_points[scope] = net
-            #37*37*4g
+            # -> 37 x 37 x 4g
 
-            scope ='block2'
-            net = block(net,12,growth,scope=scope)
+            scope = 'block2'
+            net = block(net, 12, growth, scope=scope)
             end_points[scope] = net
-            #37*37*16g(4g +12g)
+            # -> 37 x 37 x 16g (4g + 12g)
             scope = 'transition2'
-            net = bn_act_conv_drp(net,reduce_dim(net),[1,1],scope=scope)
-            #37*37*8g
+            net = bn_act_conv_drp(net, reduce_dim(net), [1, 1], scope=scope)
+            # -> 37 x 37 x 8g
             scope = 'avgpool2'
-            net = slim.avg_pool2d(net,[2,2],stride=2,scope=scope)
+            net = slim.avg_pool2d(net, [2, 2], stride=2, scope=scope)
             end_points[scope] = net
-            #18*18*8g
-            
+            # -> 18 x 18 x 8g
 
             scope = 'block3'
-            net = block(net,36,growth,scope=scope)
+            net = block(net, 36, growth, scope=scope)
             end_points[scope] = net
-            #18*18*(8g+36g)
+            # -> 18 x 18 x 44g (8g + 36g)
             scope = 'transition3'
-            net = bn_act_conv_drp(net,reduce_dim(net),[1,1],scope=scope)
-            #18*18*22g
+            net = bn_act_conv_drp(net, reduce_dim(net), [1, 1], scope=scope)
+            # -> 18 x 18 x 22g
             scope = 'avgpool3'
-            net = slim.avg_pool2d(net,[2,2],stride=2,scope=scope)
+            net = slim.avg_pool2d(net, [2, 2], stride=2, scope=scope)
             end_points[scope] = net
-            #9*9*22g
+            # -> 9 x 9 x 22g
+
             scope = 'AuxLogits'
-            aux = bn_act_conv_drp(net,reduce_dim(net),[3,3],scope=scope)
-            aux = slim.conv2d(aux,int(net.shape[-1]),[3,3],
-                              activation_fn = tf.nn.relu,scope=scope + '_conv1')
-            aux = slim.avg_pool2d(aux,aux.shape[1:3])
+            aux = bn_act_conv_drp(net, reduce_dim(net), [3, 3], scope=scope)
+            aux = slim.conv2d(aux, int(net.shape[-1]), [3, 3],
+                              activation_fn=tf.nn.relu, scope=scope + '_conv1')
+            aux = slim.avg_pool2d(aux, aux.shape[1:3])
             aux = slim.flatten(aux)
-            aux_logits = slim.fully_connected(aux,num_classes,
-                                             activation_fn=None,
-                                             scope='Aux_logits')
-            end_points[scope] = aux_logits#使最终的训练不依赖block4，让前面也能有很好 的输出
+            aux_logits = slim.fully_connected(aux, num_classes,
+                                              activation_fn=None,
+                                              scope='Aux_logits')
+            end_points[scope] = aux_logits
 
             scope = 'block4'
-            net = block(net,24,growth,scope=scope)
+            net = block(net, 24, growth, scope=scope)
             end_points[scope] = net
-            #9*9*（22g+24g）
+            # -> 9 x 9 x 46g (22g + 24g)
+
             scope = 'last_batch_norm_relu'
-            net = slim.batch_norm(net,scope=scope)
+            net = slim.batch_norm(net, scope=scope)
             net = tf.nn.relu(net)
 
-
             scope = 'global_average'
-            net = slim.avg_pool2d(net,net.shape[1:3],scope=scope)
+            net = slim.avg_pool2d(net, net.shape[1:3], scope=scope)
             end_points[scope] = net
-            #1*1*46g
+            # 1 x 1 x 46g
 
-            biases_initializer = tf.constant_initializer(0,1)
+            biases_initializer = tf.constant_initializer(0.1)
             scope = 'pre_logits'
-            pre_logit = slim.conv2d(net,num_classes,[1,1],#和输入大小一致的卷积核，卷积等价全连接
+            pre_logit = slim.conv2d(net, num_classes, [1, 1],
                                     biases_initializer=biases_initializer,
                                     scope=scope)
             end_points[scope] = net
-
 
             scope = 'logits'
             logits = tf.squeeze(pre_logit)
             end_points[scope] = logits
             print(logits)
-
 
     return logits, end_points
 
@@ -159,7 +156,7 @@ def bn_drp_scope(is_training=True, keep_prob=0.8):
 
 
 def densenet_arg_scope(weight_decay=0.004):
-    """Defines the default densenet argument scope.
+    """Defines the default cifarnet argument scope.
 
     Args:
       weight_decay: The weight decay to use for regularizing the model.
